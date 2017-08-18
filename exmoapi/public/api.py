@@ -2,16 +2,8 @@ from exmoapi.core.api import CoreApi
 
 
 class PublicApi(CoreApi):
-    def __init__(self,
-                 api_url='https://api.exmo.com',
-                 api_version='v1',
-                 headers=(),
-                 proxies=(),
-                 connection_attempts=5):
-        super().__init__(api_key=None, api_secret=None,
-                         api_url=api_url, api_version=api_version,
-                         headers=headers, proxies=proxies,
-                         connection_attempts=connection_attempts)
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
 
     def trades(self, pairs):
         """

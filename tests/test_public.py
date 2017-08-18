@@ -1,41 +1,15 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-"""Tests for `exmoapi` package."""
+"""Tests for `exmoapi.public` package."""
 
 import unittest
 
-from exmoapi.core import CoreApi
 from exmoapi.public import PublicApi
 
 
-class TestCoreApi(unittest.TestCase):
-    """Tests for `exmoapi.core` module."""
-
-    def setUp(self):
-        """Set up test fixtures, if any."""
-
-    def tearDown(self):
-        """Tear down test fixtures, if any."""
-
-    def test_nonce(self):
-        api = CoreApi()
-        nonce_sequence = (api.next_nonce for _ in range(10))
-        last = 0
-        for nonce in nonce_sequence:
-            self.assertTrue(nonce > last)
-            last = nonce
-
-    def test_connection(self):
-        """Test connection."""
-        api = CoreApi()
-        ok = api.ping()
-        self.assertTrue(ok, True)
-
-
-class TestExmoapi(unittest.TestCase):
-    """Tests for `exmoapi` package."""
-
+class TestPublicApi(unittest.TestCase):
+    """Tests for `exmoapi.public.api` module."""
     def setUp(self):
         """Set up test fixtures, if any."""
         self.pairs = ('BTC_USD', 'BTC_RUB', 'USD_RUB')
@@ -58,7 +32,8 @@ class TestExmoapi(unittest.TestCase):
 
         self.assertIsInstance(order_book, dict)
         self.assertTrue(set(order_book.keys()), set(self.pairs))
-        self.assertTrue(all(map(lambda el: len(el.get('ask')) <= self.limit >= len(el.get('bid')), order_book.values())))
+        self.assertTrue(all(map(lambda el: len(el.get('ask')) <= self.limit >= len(el.get('bid')),
+                                order_book.values())))
 
     def test_query_ticker(self):
         """Test query `ticker`"""

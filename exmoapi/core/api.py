@@ -1,9 +1,12 @@
 import hashlib
 import hmac
 import time
+from enum import Enum
 
 import requests
 from requests.models import urlencode
+
+from exmoapi.core.utils import recursive_transform
 
 
 class Credential(object):
@@ -32,13 +35,13 @@ class CoreApi(object):
                  headers=(),
                  proxies=(),
                  connection_attempts=5):
-        self._API_URL = api_url
-        self._API_VERSION = api_version
         self._API_KEY = api_key
         self._API_SECRET = bytes(api_secret or '', encoding='utf-8')
-        self._proxies = proxies or {}
+        self._API_URL = api_url
+        self._API_VERSION = api_version
         self._headers = {'Content-type': 'application/x-www-form-urlencoded'}
         self._headers.update(headers)
+        self._proxies = proxies or {}
         self._connection_attempts = CoreApi.MAX_CONNECTION_ATTEMPTS
         self.connection_attempts = connection_attempts
         self._last_nonce = 0
@@ -60,7 +63,7 @@ class CoreApi(object):
         else:
             self._connection_attempts = CoreApi.MAX_CONNECTION_ATTEMPTS
 
-    def query(self, api_endpoint, params=None, request_method='post'):
+    def query(self, api_endpoint, params=None, http_method='post'):
         """
         Performs an request to API with the specified parameters.
 
@@ -70,66 +73,44 @@ class CoreApi(object):
 
         :param api_endpoint: API endpoint
         :param params: query parameters
-        :param request_method: request method (GET or POST).
+        :param http_method: request method (GET or POST).
         :return:
         """
-        req_method = request_method.lower()
-        if req_method not in ('get', 'post'):
-            raise ValueError("The request method must be 'get' or 'post'")
+        http_method = http_method.lower()
+        if http_method not in ('get', 'post'):
+            raise ValueError("Parameter `http_method` must be 'get' or 'post' (default: 'post').")
 
         url = f'{self._API_URL}/{self._API_VERSION}/{api_endpoint}'
         params = params or {}
-        headers = self._headers
+        headers = dict(self._headers)
 
-        if self._API_KEY and self._API_SECRET:
-            self._sign(headers, params)
-
-        for _ in range(0, self._connection_attempts + 1):
+        response = None
+        attempts = int(self._connection_attempts)
+        while attempts:
+            attempts -= 1
             try:
-                response = requests.request(req_method, url, data=params, headers=headers, proxies=self._proxies)
+                if self._API_KEY and self._API_SECRET:
+                    self._sign(headers, params)
+                response = requests.request(http_method, url, data=params, headers=headers, proxies=self._proxies)
+                break
             except Exception as e:
+                if not attempts:
+                    raise e
                 print(e)
                 print('Retrying in 5 seconds...')
                 time.sleep(CoreApi.CONNECTION_ATTEMPTS_PAUSE)
-                continue
 
-            # The processing of the response is carried out in a separate try-except block
-            # in order to exclude the repeated execution of the non-idempotent query.
-            try:
-                obj = response.json()
-                if isinstance(obj, dict):
-                    err = obj.get('error')
-                    if err:
-                        raise Exception(err)
-
-                def recursive_transform(obj):
-                    """Recursive converting object to properly handle int and float."""
-                    if isinstance(obj, dict):
-                        rv = {}
-                        for k, v in obj.items():
-                            rv.update({k: recursive_transform(v)})
-                        return rv
-                    if isinstance(obj, (list, tuple, set, frozenset)):
-                        rv = []
-                        for el in obj:
-                            rv.append(recursive_transform(el))
-                        return type(obj)(rv)
-                    if isinstance(obj, str):
-
-                        if obj.isdecimal():
-                            rv = int(obj)
-                        else:
-                            try:
-                                rv = float(obj)
-                            except:
-                                rv = obj
-                        return rv
-
-                obj = recursive_transform(obj)
-
-                return obj
-            except Exception as e:
-                raise e
+        # The processing of the response is carried out in a separate try-except block
+        # in order to exclude the repeated execution of the non-idempotent query.
+        try:
+            obj = response.json()
+            if isinstance(obj, dict):
+                err = obj.get('error')
+                if err:
+                    raise Exception(err)
+            return recursive_transform(obj)
+        except Exception as e:
+            raise e
 
     def ping(self):
         """
@@ -156,8 +137,7 @@ class CoreApi(object):
             nonce = int(round(time.time() * 1000))
             if nonce > self._last_nonce:
                 self._last_nonce = nonce
-                break
-        return nonce
+                return nonce
 
     def _sign(self, headers, params):
         params['nonce'] = self.next_nonce
